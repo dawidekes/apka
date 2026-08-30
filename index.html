@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SplitUp - Firebase</title>
+  <title>Zaplanuj swoje wydatki</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -76,18 +76,11 @@
       <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0; margin-bottom:12px;">
         ID Grupy: <strong id="group-id-display"></strong>
       </p>
-      <button id="copy-group-id-btn" class="btn-secondary">🔗 Skopiuj ID dla znajomych</button>
-    </div>
-
-    <!-- Ustawienia użytkownika w tej konkretnej grupie -->
-    <div class="card">
-      <h3>Twoje ustawienia w tej grupie</h3>
-      <label>Twoja nazwa wyświetlana w tej grupie:</label>
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <input type="text" id="group-member-name-input" placeholder="Twoja ksywka" style="margin-bottom:0;">
-        <button id="update-group-member-name-btn" class="btn-secondary" style="width: auto; white-space: nowrap;">Zmień nazwę</button>
+      
+      <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+        <button id="copy-group-id-btn" class="btn-secondary" style="width: auto;">🔗 Skopiuj ID</button>
+        <button id="open-settings-btn" class="btn-secondary" style="width: auto;">⚙️ Zarządzaj grupą</button>
       </div>
-      <button id="leave-group-btn" class="btn-small btn-danger" style="width: 100%;">🚪 Opuść tę grupę</button>
     </div>
 
     <div class="card">
@@ -147,6 +140,54 @@
 
   </div>
 
+  <!-- WIDOK 4: Zakładka Zarządzania Grupą -->
+  <div id="group-settings-view" class="hidden">
+    <div class="card" style="text-align: center; position: relative;">
+      <button id="back-to-group-btn" class="btn-small btn-secondary" style="position: absolute; left: 20px; top: 20px;">⬅ Wróć do grupy</button>
+      <h2 style="margin-top: 10px; margin-bottom: 5px;">⚙️ Zarządzanie grupą</h2>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">Ustawienia grupy i uprawnienia członków</p>
+    </div>
+
+    <div class="card">
+      <h3>Zmiana nazwy grupy</h3>
+      <label>Nowa nazwa grupy (tylko administrator):</label>
+      <div style="display: flex; gap: 8px;">
+        <input type="text" id="group-rename-input" placeholder="Nazwa grupy" style="margin-bottom:0;">
+        <button id="update-group-name-btn" class="btn-secondary" style="width: auto; white-space: nowrap;">Zapisz nazwę</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Członkowie grupy i role</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Administratorzy mogą zmieniać ksywki, usuwać użytkowników oraz nadawać lub odbierać uprawnienia.</p>
+      <div id="manage-members-list" style="display: flex; flex-direction: column; gap: 12px;">
+        <!-- Lista generowana dynamicznie -->
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Strefa niebezpieczna</h3>
+      <div style="display: flex; gap: 10px;">
+        <button id="leave-group-btn" class="btn-small btn-secondary" style="flex: 1;">🚪 Opuść tę grupę</button>
+        <button id="delete-group-btn" class="btn-small btn-danger hidden" style="flex: 1;">🗑️ Usuń grupę</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL / OKIENKO SZCZEGÓŁÓW WYDATKU -->
+<div id="expense-details-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+  <div class="card" style="width: 90%; max-width: 400px; margin: 0; background: white; position: relative;">
+    <h3 id="modal-expense-title" style="margin-top: 0;">Szczegóły wydatku</h3>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px;">Opłacił(a): <strong id="modal-expense-payer"></strong></p>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">Łączna kwota: <strong id="modal-expense-total"></strong></p>
+    
+    <h4 style="margin-bottom: 8px; font-size: 0.95rem;">Udział poszczególnych osób:</h4>
+    <div id="modal-shares-list" style="max-height: 150px; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 4px;"></div>
+
+    <button id="close-modal-btn" class="btn-secondary" style="width: 100%;">Zamknij</button>
+  </div>
 </div>
 
 <script>
@@ -166,6 +207,10 @@
         }
       });
     }
+
+    document.getElementById('close-modal-btn').addEventListener('click', () => {
+      document.getElementById('expense-details-modal').classList.add('hidden');
+    });
   });
 </script>
 <script type="module" src="skrypt.js"></script>
