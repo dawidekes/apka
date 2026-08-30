@@ -29,7 +29,7 @@ let editingExpenseId = null;
 let unsubscribeExpenses = null;
 let unsubscribePayments = null;
 let unsubscribeLogs = null;
-let unsubscribeGroup = null; // Nasłuchiwacz zmian w samej grupie (np. gdy ktoś zmieni nazwę)
+let unsubscribeGroup = null;
 
 let localExpenses = [];
 let localPayments = [];
@@ -37,6 +37,7 @@ let localPayments = [];
 const authView = document.getElementById('auth-view');
 const dashboardView = document.getElementById('dashboard-view');
 const groupView = document.getElementById('group-view');
+const groupSettingsView = document.getElementById('group-settings-view');
 
 // ------------------- LOGOWANIE -------------------
 
@@ -133,12 +134,14 @@ function showAuth() {
   authView.classList.remove('hidden');
   dashboardView.classList.add('hidden');
   groupView.classList.add('hidden');
+  groupSettingsView.classList.add('hidden');
 }
 
 function showDashboard() {
   authView.classList.add('hidden');
   dashboardView.classList.remove('hidden');
   groupView.classList.add('hidden');
+  groupSettingsView.classList.add('hidden');
   
   document.getElementById('new-group-member-name').value = currentUserName;
   document.getElementById('join-group-member-name').value = currentUserName;
@@ -149,6 +152,27 @@ function showGroup() {
   authView.classList.add('hidden');
   dashboardView.classList.add('hidden');
   groupView.classList.remove('hidden');
+  groupSettingsView.classList.add('hidden');
+}
+
+function showGroupSettings() {
+  authView.classList.add('hidden');
+  dashboardView.classList.add('hidden');
+  groupView.classList.add('hidden');
+  groupSettingsView.classList.remove('hidden');
+
+  const deleteGroupBtn = document.getElementById('delete-group-btn');
+  const admins = currentGroupData?.admins || [];
+  if (admins.includes(currentUser.uid)) {
+    deleteGroupBtn.classList.remove('hidden');
+  } else {
+    deleteGroupBtn.classList.add('hidden');
+  }
+  
+  // Odśwież listę zarządzania członkami za każdym razem po wejściu w ustawienia
+  if (currentGroupData) {
+    renderMembersManagement(currentGroupData);
+  }
 }
 
 function cleanupListeners() {
@@ -195,10 +219,13 @@ document.getElementById('create-group-btn').addEventListener('click', async () =
   let membersMap = {};
   membersMap[currentUser.uid] = memberName;
 
+  let admins = [currentUser.uid];
+
   await addDoc(collection(db, "groups"), {
     name: name,
     members: [currentUser.uid], 
-    membersMap: membersMap,     
+    membersMap: membersMap,
+    admins: admins,    
     createdAt: serverTimestamp()
   });
   
@@ -218,16 +245,19 @@ document.getElementById('join-group-btn').addEventListener('click', async () => 
 
   if (groupSnap.exists()) {
     const data = groupSnap.data();
-    if(!data.membersMap) data.membersMap = {};
+    let membersMap = data.membersMap || {};
+    let members = data.members || [];
+    let admins = data.admins || [];
     
-    if (!data.members.includes(currentUser.uid)) {
-      data.members.push(currentUser.uid);
+    if (!members.includes(currentUser.uid)) {
+      members.push(currentUser.uid);
     }
-    data.membersMap[currentUser.uid] = memberName;
+    membersMap[currentUser.uid] = memberName;
 
     await updateDoc(groupRef, { 
-      members: data.members,
-      membersMap: data.membersMap
+      members: members,
+      membersMap: membersMap,
+      admins: admins
     });
 
     document.getElementById('join-group-id').value = '';
@@ -244,13 +274,11 @@ function openGroup(id) {
   currentGroupId = id;
   showGroup();
 
-  // Nasłuchuj na żywo zmian w dokumencie grupy (np. gdy ktoś zmieni nazwę członka)
   unsubscribeGroup = onSnapshot(doc(db, "groups", id), (docSnap) => {
     if (docSnap.exists()) {
       currentGroupData = docSnap.data();
       
-      // Jeśli użytkownik z jakiegoś powodu został usunięty lub nie ma go w grupie
-      if (!currentGroupData.members.includes(currentUser.uid)) {
+      if (!currentGroupData.members || !currentGroupData.members.includes(currentUser.uid)) {
         alert("Zostałeś wypisany z grupy lub grupa przestała istnieć.");
         document.getElementById('back-to-dash-btn').click();
         return;
@@ -262,9 +290,10 @@ function openGroup(id) {
 
       document.getElementById('group-title').innerText = currentGroupData.name;
       document.getElementById('group-id-display').innerText = id;
-      document.getElementById('group-member-name-input').value = myNameInThisGroup;
+      document.getElementById('group-rename-input').value = currentGroupData.name;
 
       updateGroupUI(currentGroupData.membersMap, myNameInThisGroup);
+      renderMembersManagement(currentGroupData);
     }
   });
 
@@ -283,10 +312,126 @@ document.getElementById('copy-group-id-btn').addEventListener('click', () => {
   alert(`Skopiowano ID grupy: ${currentGroupId}`);
 });
 
-// Zmiana nazwy użytkownika wewnątrz konkretnej grupy
-document.getElementById('update-group-member-name-btn').addEventListener('click', async () => {
-  const newName = document.getElementById('group-member-name-input').value.trim();
-  if (!newName) return alert("Nazwa w grupie nie może być pusta!");
+document.getElementById('open-settings-btn').addEventListener('click', () => {
+  showGroupSettings();
+});
+
+document.getElementById('back-to-group-btn').addEventListener('click', () => {
+  showGroup();
+});
+
+document.getElementById('update-group-name-btn').addEventListener('click', async () => {
+  const admins = currentGroupData.admins || [];
+  const isAdmin = admins.includes(currentUser.uid);
+  if (!isAdmin) return alert("Tylko administrator może zmienić nazwę grupy!");
+
+  const newGroupName = document.getElementById('group-rename-input').value.trim();
+  if (!newGroupName) return alert("Nazwa grupy nie może być pusta!");
+
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    await updateDoc(groupRef, { name: newGroupName });
+    addLogIdSafe(`[Grupa] Zmieniono nazwę grupy na "${newGroupName}".`, 'info');
+    alert("Zmieniono nazwę grupy!");
+  } catch (error) {
+    console.error("Błąd zmiany nazwy grupy:", error);
+    alert("Nie udało się zmienić nazwy grupy.");
+  }
+});
+
+document.getElementById('delete-group-btn').addEventListener('click', async () => {
+  const admins = currentGroupData.admins || [];
+  const isAdmin = admins.includes(currentUser.uid);
+  
+  if (!isAdmin) {
+    return alert("Tylko administrator może usunąć całą grupę!");
+  }
+
+  if (!confirm("Czy na pewno chcesz bezpowrotnie usunąć tę grupę? Ta operacja usunie wszystkie wydatki, spłaty i historię dla wszystkich uczestników.")) {
+    return;
+  }
+
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    await deleteDoc(groupRef);
+
+    alert("Grupa została pomyślnie usunięta.");
+    document.getElementById('back-to-dash-btn').click();
+  } catch (error) {
+    console.error("Błąd podczas usuwania grupy:", error);
+    alert("Nie udało się usunąć grupy.");
+  }
+});
+
+function renderMembersManagement(groupData) {
+  const container = document.getElementById('manage-members-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const membersMap = groupData.membersMap || {};
+  const admins = groupData.admins || [];
+  const currentUserIsAdmin = admins.includes(currentUser.uid);
+
+  for (let [uid, name] of Object.entries(membersMap)) {
+    const isMe = (uid === currentUser.uid);
+    const isUserAdmin = admins.includes(uid);
+    
+    const row = document.createElement('div');
+    row.style.background = '#f9f9f9';
+    row.style.padding = '10px';
+    row.style.borderRadius = '6px';
+    row.style.border = '1px solid #eee';
+    row.style.marginBottom = '8px';
+
+    let html = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <strong style="font-size: 0.95rem;">${name} ${isMe ? '(Ty)' : ''}</strong>
+        <span style="font-size: 0.75rem; padding: 2px 6px; background: ${isUserAdmin ? '#e3f2fd' : '#eee'}; color: ${isUserAdmin ? '#1976d2' : '#666'}; border-radius: 4px; font-weight: 600;">
+          ${isUserAdmin ? '👑 Administrator' : '👤 Członek'}
+        </span>
+      </div>
+    `;
+
+    if (currentUserIsAdmin || isMe) {
+      html += `
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+          <input type="text" value="${name}" id="member-name-${uid}" style="margin-bottom:0;" placeholder="Nowa ksywka">
+          <button class="btn-small btn-secondary" onclick="window.saveMemberName('${uid}')" style="white-space:nowrap; width:auto;">Zapisz ksywkę</button>
+        </div>
+      `;
+    } else {
+      html += `<div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Ksywka: ${name}</div>`;
+    }
+
+    if (currentUserIsAdmin && !isMe) {
+      const toggleAdminText = isUserAdmin ? 'Odbierz admina' : 'Nadaj admina';
+      const toggleAdminAction = isUserAdmin ? 'demoteAdmin' : 'promoteAdmin';
+
+      html += `
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; border-top: 1px dashed #ddd; padding-top: 8px;">
+          <button class="btn-small btn-secondary" onclick="window.${toggleAdminAction}('${uid}')" style="width: auto; font-size: 0.75rem;">${toggleAdminText}</button>
+          <button class="btn-small btn-danger" onclick="window.removeGroupMember('${uid}', '${name}')" style="width: auto; font-size: 0.75rem;">Usuń z grupy</button>
+        </div>
+      `;
+    }
+
+    row.innerHTML = html;
+    container.appendChild(row);
+  }
+}
+
+window.saveMemberName = async function(targetUid) {
+  const isMe = (targetUid === currentUser.uid);
+  const admins = currentGroupData.admins || [];
+  const isAdmin = admins.includes(currentUser.uid);
+
+  if (!isMe && !isAdmin) {
+    return alert("Nie masz uprawnień do zmiany nazwy tego użytkownika!");
+  }
+
+  const inputEl = document.getElementById(`member-name-${targetUid}`);
+  const newName = inputEl ? inputEl.value.trim() : "";
+  if (!newName) return alert("Nazwa nie może być pusta!");
 
   try {
     const groupRef = doc(db, "groups", currentGroupId);
@@ -295,23 +440,96 @@ document.getElementById('update-group-member-name-btn').addEventListener('click'
       let data = groupSnap.data();
       if (!data.membersMap) data.membersMap = {};
       
-      const oldName = data.membersMap[currentUser.uid];
-      data.membersMap[currentUser.uid] = newName;
+      const oldName = data.membersMap[targetUid];
+      data.membersMap[targetUid] = newName;
 
-      await updateDoc(groupRef, {
-        membersMap: data.membersMap
-      });
-
-      addLogIdSafe(`[Profil] Uczestnik zmienił nazwę z "${oldName}" na "${newName}".`, 'info');
-      alert("Zaktualizowano Twoją nazwę w tej grupie!");
+      await updateDoc(groupRef, { membersMap: data.membersMap });
+      addLogIdSafe(`[Zarządzanie] Zmieniono ksywkę użytkownika z "${oldName}" na "${newName}".`, 'info');
+      alert("Zaktualizowano nazwę członka grupy!");
     }
   } catch (error) {
-    console.error("Błąd zmiany nazwy w grupie:", error);
-    alert("Wystąpił błąd podczas aktualizacji nazwy.");
+    console.error("Błąd edycji nazwy użytkownika:", error);
+    alert("Wystąpił błąd.");
   }
-});
+};
 
-// Opuść grupę
+window.promoteAdmin = async function(targetUid) {
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      let data = groupSnap.data();
+      let admins = data.admins || [];
+      
+      if (!admins.includes(targetUid)) {
+        admins.push(targetUid);
+        await updateDoc(groupRef, { admins: admins });
+        const targetName = data.membersMap[targetUid] || "Użytkownik";
+        addLogIdSafe(`[Admin] Nadano uprawnienia administratora użytkownikowi "${targetName}".`, 'info');
+        alert("Nadano rangę administratora.");
+      }
+    }
+  } catch (e) {
+    console.error("Błąd nadawania admina:", e);
+  }
+};
+
+window.demoteAdmin = async function(targetUid) {
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      let data = groupSnap.data();
+      let admins = data.admins || [];
+      
+      if (admins.length <= 1) {
+        return alert("Grupa musi mieć przynajmniej jednego administratora!");
+      }
+
+      admins = admins.filter(id => id !== targetUid);
+      await updateDoc(groupRef, { admins: admins });
+      const targetName = data.membersMap[targetUid] || "Użytkownik";
+      addLogIdSafe(`[Admin] Odebrano uprawnienia administratora użytkownikowi "${targetName}".`, 'info');
+      alert("Odebrano rangę administratora.");
+    }
+  } catch (e) {
+    console.error("Błąd odbierania admina:", e);
+  }
+};
+
+window.removeGroupMember = async function(targetUid, targetName) {
+  const admins = currentGroupData.admins || [];
+  const isAdmin = admins.includes(currentUser.uid);
+  if (!isAdmin) return alert("Tylko administrator może usuwać członków z grupy!");
+
+  if (!confirm(`Czy na pewno chcesz usunąć użytkownika "${targetName}" z grupy?`)) return;
+
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      let data = groupSnap.data();
+      
+      let members = (data.members || []).filter(id => id !== targetUid);
+      let membersMap = data.membersMap || {};
+      delete membersMap[targetUid];
+      let groupAdmins = (data.admins || []).filter(id => id !== targetUid);
+
+      await updateDoc(groupRef, {
+        members: members,
+        membersMap: membersMap,
+        admins: groupAdmins
+      });
+
+      addLogIdSafe(`[Zarządzanie] Usunięto użytkownika "${targetName}" z grupy.`, 'delete');
+      alert("Usunięto użytkownika z grupy.");
+    }
+  } catch (error) {
+    console.error("Błąd usuwania użytkownika:", error);
+    alert("Nie udało się usunąć użytkownika.");
+  }
+};
+
 document.getElementById('leave-group-btn').addEventListener('click', async () => {
   if (!confirm("Czy na pewno chcesz opuścić tę grupę? Stracisz do niej dostęp.")) return;
 
@@ -321,15 +539,22 @@ document.getElementById('leave-group-btn').addEventListener('click', async () =>
     if (groupSnap.exists()) {
       let data = groupSnap.data();
       
-      // Usuń użytkownika z listy members oraz z membersMap
-      data.members = data.members.filter(uid => uid !== currentUser.uid);
-      if (data.membersMap) {
-        delete data.membersMap[currentUser.uid];
+      let admins = data.admins || [];
+      const isLeavingAdmin = admins.includes(currentUser.uid);
+      if (isLeavingAdmin && admins.length === 1 && (data.members || []).length > 1) {
+        alert("Jesteś jedynym administratorem. Przed opuszczeniem grupy nadaj komuś innemu uprawnienia administratora!");
+        return;
       }
 
+      let members = (data.members || []).filter(uid => uid !== currentUser.uid);
+      let membersMap = data.membersMap || {};
+      delete membersMap[currentUser.uid];
+      let groupAdmins = admins.filter(uid => uid !== currentUser.uid);
+
       await updateDoc(groupRef, {
-        members: data.members,
-        membersMap: data.membersMap
+        members: members,
+        membersMap: membersMap,
+        admins: groupAdmins
       });
 
       alert("Opuszczono grupę.");
@@ -353,18 +578,8 @@ function updateGroupUI(membersMap, myNameInThisGroup) {
   payFrom.innerHTML = options;
   payTo.innerHTML = options;
 
-  // Zachowaj wybrane wcześniej opcje jeśli to możliwe, lub ustaw domyślne
-  if (names.includes(payerSelect.value)) {
-    // zostaw jak było
-  } else {
-    payerSelect.value = myNameInThisGroup;
-  }
-
-  if (names.includes(payFrom.value)) {
-    // zostaw
-  } else {
-    payFrom.value = myNameInThisGroup;
-  }
+  if (!names.includes(payerSelect.value)) payerSelect.value = myNameInThisGroup;
+  if (!names.includes(payFrom.value)) payFrom.value = myNameInThisGroup;
 
   document.getElementById('equal-users-list').innerHTML = names.map(name => `
     <label class="checkbox-label">
@@ -468,7 +683,7 @@ window.editExpense = function(id) {
   document.getElementById('save-expense-btn').innerText = 'Zapisz zmiany';
   document.getElementById('cancel-edit-btn').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+};
 
 window.deleteExpense = async function(id, title, total) {
   const myNameInThisGroup = currentGroupData.membersMap[currentUser.uid];
@@ -476,7 +691,32 @@ window.deleteExpense = async function(id, title, total) {
     await deleteDoc(doc(db, `groups/${currentGroupId}/expenses`, id));
     addLogToDB(`[Usunięto] ${myNameInThisGroup} usunął(ęła) wydatek "${title}" (${total.toFixed(2)} zł).`, 'delete');
   }
-}
+};
+
+window.showExpenseDetails = function(id) {
+  const exp = localExpenses.find(e => e.id === id);
+  if (!exp) return;
+
+  document.getElementById('modal-expense-title').innerText = exp.title;
+  document.getElementById('modal-expense-payer').innerText = exp.payer;
+  document.getElementById('modal-expense-total').innerText = `${exp.total.toFixed(2)} zł`;
+
+  const sharesListDiv = document.getElementById('modal-shares-list');
+  sharesListDiv.innerHTML = '';
+
+  for (let [user, amount] of Object.entries(exp.shares)) {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.justifyContent = 'space-between';
+    row.style.fontSize = '0.9rem';
+    row.style.padding = '4px 0';
+    row.style.borderBottom = '1px solid #eee';
+    row.innerHTML = `<span>${user}</span> <strong>${amount.toFixed(2)} zł</strong>`;
+    sharesListDiv.appendChild(row);
+  }
+
+  document.getElementById('expense-details-modal').classList.remove('hidden');
+};
 
 document.getElementById('add-payment-btn').addEventListener('click', async () => {
   const from = document.getElementById('payment-from').value;
@@ -548,6 +788,7 @@ function renderHistory() {
         <div style="font-weight:600;">${e.title}</div>
         <div style="font-size:0.8rem; color:var(--text-muted);">Płacił(a): ${e.payer}</div>
         <div class="item-actions">
+          <button onclick="window.showExpenseDetails('${e.id}')" class="btn-small btn-secondary">🔍 Szczegóły</button>
           <button onclick="window.editExpense('${e.id}')" class="btn-small btn-secondary">✏️ Edytuj</button>
           <button onclick="window.deleteExpense('${e.id}', '${e.title}', ${e.total})" class="btn-small btn-danger">🗑️ Usuń</button>
         </div>
