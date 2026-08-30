@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SplitUp - Firebase</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <!-- WIDOK 1: Logowanie / Rejestracja -->
+  <div id="auth-view" class="card">
+    <h2>SplitUp - Zaloguj się</h2>
+    <label>Imię (wymagane do rejestracji)</label>
+    <input type="text" id="auth-name" placeholder="Twoje imię">
+    <label>Email</label>
+    <input type="email" id="auth-email" placeholder="Wpisz swój email">
+    <label>Hasło</label>
+    <input type="password" id="auth-password" placeholder="Wpisz hasło (min. 6 znaków)">
+    
+    <button id="login-btn" style="margin-bottom: 10px;">Zaloguj się</button>
+    <button id="register-btn" class="btn-secondary">Zarejestruj się</button>
+    <div id="auth-error" style="color: red; font-size: 0.8rem; margin-top: 10px; display: none;"></div>
+  </div>
+
+  <!-- WIDOK 2: Dashboard (Lista grup) -->
+  <div id="dashboard-view" class="hidden">
+    <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <p style="margin:0; font-size: 0.8rem; color: var(--text-muted);">Zalogowany jako:</p>
+        <strong id="user-email-display"></strong>
+      </div>
+      <button id="logout-btn" class="btn-small btn-danger">Wyloguj</button>
+    </div>
+
+    <div class="card">
+      <h3>Twoje Grupy</h3>
+      <div id="groups-list">
+        <!-- Lista grup wygenerowana przez JS -->
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Utwórz nową grupę</h3>
+      <input type="text" id="new-group-name" placeholder="Nazwa grupy (np. Wakacje)">
+      <button id="create-group-btn">Utwórz grupę</button>
+    </div>
+
+    <div class="card">
+      <h3>Dołącz do grupy</h3>
+      <input type="text" id="join-group-id" placeholder="Wklej ID grupy">
+      <button id="join-group-btn" class="btn-secondary">Dołącz</button>
+    </div>
+  </div>
+
+  <!-- WIDOK 3: Główny interfejs grupy -->
+  <div id="group-view" class="hidden">
+    
+    <div class="card" style="text-align: center; position: relative;">
+      <button id="back-to-dash-btn" class="btn-small btn-secondary" style="position: absolute; left: 20px; top: 20px;">⬅ Wróć</button>
+      <h2 id="group-title" style="margin-bottom: 4px; margin-top: 10px;"></h2>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0; margin-bottom:12px;">
+        ID Grupy: <strong id="group-id-display"></strong>
+      </p>
+      <button id="copy-group-id-btn" class="btn-secondary">🔗 Skopiuj ID dla znajomych</button>
+    </div>
+
+    <div class="card">
+      <h3 id="form-title">Dodaj wydatek</h3>
+      <label>Co kupiono?</label>
+      <input type="text" id="expense-title" placeholder="np. Paliwo, Obiady">
+      <label>Kto płacił?</label>
+      <select id="expense-payer"></select>
+      
+      <label>Sposób podziału</label>
+      <select id="split-type">
+        <option value="equal">Równo na wybranych</option>
+        <option value="exact">Dokładne kwoty</option>
+      </select>
+
+      <div id="equal-split-section">
+        <label>Łączna kwota (PLN)</label>
+        <input type="number" id="expense-amount" placeholder="0.00" step="0.01">
+        <label>Dla kogo wydatek?</label>
+        <div id="equal-users-list" class="user-select"></div>
+      </div>
+
+      <div id="exact-split-section" class="hidden">
+        <label>Wpisz kwotę dla każdej osoby</label>
+        <div id="exact-users-list"></div>
+      </div>
+
+      <button id="save-expense-btn">Zapisz wydatek</button>
+      <button id="cancel-edit-btn" class="btn-secondary hidden" style="margin-top:8px;">Anuluj edycję</button>
+    </div>
+
+    <div class="card">
+      <h3>Zarejestruj spłatę</h3>
+      <label>Kto oddaje?</label>
+      <select id="payment-from"></select>
+      <label>Komu oddaje?</label>
+      <select id="payment-to"></select>
+      <label>Kwota spłaty (PLN)</label>
+      <input type="number" id="payment-amount" placeholder="0.00" step="0.01">
+      <button id="add-payment-btn" style="background-color: var(--accent);">Zarejestruj spłatę</button>
+    </div>
+
+    <div class="card">
+      <h3>Kto komu ile zwraca</h3>
+      <div id="settlements-list"></div>
+    </div>
+
+    <div class="card">
+      <h3>Historia wydatków</h3>
+      <div id="expenses-history"></div>
+    </div>
+
+    <div class="card">
+      <h3>Dziennik zdarzeń (Logi)</h3>
+      <div id="logs-history" class="logs-container"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Skrypt jako moduł (wymagane dla Firebase v9+) -->
+<script type="module" src="skrypt.js"></script>
+</body>
+</html>
