@@ -3,25 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SplitUp - Firebase</title>
+  <title>Zapisz swoje wydatki 67</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="container">
 
-  <!-- WIDOK 1: Logowanie / Rejestracja -->
+  <!-- WIDOK 1: Logowanie / Rejestracja ogólna -->
   <div id="auth-view" class="card">
     <h2>SplitUp - Zaloguj się</h2>
-    <label>Imię (wymagane do rejestracji)</label>
-    <input type="text" id="auth-name" placeholder="Twoje imię">
-    <label>Email</label>
-    <input type="email" id="auth-email" placeholder="Wpisz swój email">
+    <label>Twoja główna nazwa (ksywka)</label>
+    <input type="text" id="auth-name" placeholder="np. Tomek, Ania">
+    
     <label>Hasło</label>
     <input type="password" id="auth-password" placeholder="Wpisz hasło (min. 6 znaków)">
     
-    <button id="login-btn" style="margin-bottom: 10px;">Zaloguj się</button>
-    <button id="register-btn" class="btn-secondary">Zarejestruj się</button>
+    <button id="login-btn" style="margin-bottom: 10px;">Wejdź / Zarejestruj się</button>
     <div id="auth-error" style="color: red; font-size: 0.8rem; margin-top: 10px; display: none;"></div>
   </div>
 
@@ -30,9 +28,19 @@
     <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <p style="margin:0; font-size: 0.8rem; color: var(--text-muted);">Zalogowany jako:</p>
-        <strong id="user-email-display"></strong>
+        <strong id="user-name-display" style="font-size: 1.1rem; color: var(--primary);"></strong>
       </div>
       <button id="logout-btn" class="btn-small btn-danger">Wyloguj</button>
+    </div>
+
+    <!-- Zmiana nazwy głównej -->
+    <div class="card">
+      <h3>Twoja nazwa profilowa</h3>
+      <label>Zmień swoją główną nazwę:</label>
+      <div style="display: flex; gap: 8px;">
+        <input type="text" id="update-name-input" placeholder="Nowa nazwa" style="margin-bottom:0;">
+        <button id="update-name-btn" class="btn-secondary" style="width: auto; white-space: nowrap;">Zapisz nazwę</button>
+      </div>
     </div>
 
     <div class="card">
@@ -45,12 +53,16 @@
     <div class="card">
       <h3>Utwórz nową grupę</h3>
       <input type="text" id="new-group-name" placeholder="Nazwa grupy (np. Wakacje)">
+      <label>Twoja nazwa w tej grupie:</label>
+      <input type="text" id="new-group-member-name" placeholder="np. Kuba, Kuba Wyjazd">
       <button id="create-group-btn">Utwórz grupę</button>
     </div>
 
     <div class="card">
       <h3>Dołącz do grupy</h3>
       <input type="text" id="join-group-id" placeholder="Wklej ID grupy">
+      <label>Twoja nazwa w tej grupie:</label>
+      <input type="text" id="join-group-member-name" placeholder="np. Kuba, Kuba Wyjazd">
       <button id="join-group-btn" class="btn-secondary">Dołącz</button>
     </div>
   </div>
@@ -65,6 +77,17 @@
         ID Grupy: <strong id="group-id-display"></strong>
       </p>
       <button id="copy-group-id-btn" class="btn-secondary">🔗 Skopiuj ID dla znajomych</button>
+    </div>
+
+    <!-- NOWOŚĆ: Ustawienia użytkownika w tej konkretnej grupie -->
+    <div class="card">
+      <h3>Twoje ustawienia w tej grupie</h3>
+      <label>Twoja nazwa wyświetlana w tej grupie:</label>
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <input type="text" id="group-member-name-input" placeholder="Twoja ksywka" style="margin-bottom:0;">
+        <button id="update-group-member-name-btn" class="btn-secondary" style="width: auto; white-space: nowrap;">Zmień nazwę</button>
+      </div>
+      <button id="leave-group-btn" class="btn-small btn-danger" style="width: 100%;">🚪 Opuść tę grupę</button>
     </div>
 
     <div class="card">
@@ -126,7 +149,6 @@
 
 </div>
 
-<!-- Skrypt jako moduł (wymagane dla Firebase v9+) -->
 <script type="module" src="skrypt.js"></script>
 </body>
 </html>
