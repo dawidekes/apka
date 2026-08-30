@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zapisz swoje wydatki 67</title>
+  <title>SplitUp - Firebase</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
 
   <!-- WIDOK 1: Logowanie / Rejestracja ogólna -->
   <div id="auth-view" class="card">
-    <h2>Zaloguj się</h2>
+    <h2>SplitUp - Zaloguj się</h2>
     <label>Twoja główna nazwa (ksywka)</label>
     <input type="text" id="auth-name" placeholder="np. Tomek, Ania">
     
@@ -79,7 +79,7 @@
       <button id="copy-group-id-btn" class="btn-secondary">🔗 Skopiuj ID dla znajomych</button>
     </div>
 
-    <!-- NOWOŚĆ: Ustawienia użytkownika w tej konkretnej grupie -->
+    <!-- Ustawienia użytkownika w tej konkretnej grupie -->
     <div class="card">
       <h3>Twoje ustawienia w tej grupie</h3>
       <label>Twoja nazwa wyświetlana w tej grupie:</label>
@@ -149,6 +149,25 @@
 
 </div>
 
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const splitTypeSelect = document.getElementById('split-type');
+    const equalSection = document.getElementById('equal-split-section');
+    const exactSection = document.getElementById('exact-split-section');
+
+    if (splitTypeSelect) {
+      splitTypeSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'exact') {
+          equalSection.classList.add('hidden');
+          exactSection.classList.remove('hidden');
+        } else {
+          equalSection.classList.remove('hidden');
+          exactSection.classList.add('hidden');
+        }
+      });
+    }
+  });
+</script>
 <script type="module" src="skrypt.js"></script>
 </body>
 </html>
