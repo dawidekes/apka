@@ -1,4 +1,3 @@
-// 1. ZAAIMPORTUJ FUNKCJE FIREBASE (Moduły)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { 
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
@@ -9,7 +8,6 @@ import {
   onSnapshot, query, where, orderBy, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-// 2. TUTAJ WKLEJ SWOJĄ KONFIGURACJĘ FIREBASE!
 const firebaseConfig = {
   apiKey: "AIzaSyBf5mCIwJppnrIMXtOuplARaO9MHN36AHQ",
   authDomain: "apka-576c1.firebaseapp.com",
@@ -19,38 +17,36 @@ const firebaseConfig = {
   appId: "1:320118113243:web:57d80fc99a123858d1ddfe"
 };
 
-// Inicjalizacja Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Zmienne stanu aplikacji
 let currentUser = null;
-let currentUserName = ""; // Przechowuje imię zalogowanego użytkownika
+let currentUserName = ""; 
 let currentGroupId = null;
 let currentGroupData = null;
 let editingExpenseId = null;
 let unsubscribeExpenses = null;
 let unsubscribePayments = null;
 let unsubscribeLogs = null;
+let unsubscribeGroup = null; // Nasłuchiwacz zmian w samej grupie (np. gdy ktoś zmieni nazwę)
 
 let localExpenses = [];
 let localPayments = [];
 
-// Elementy DOM
 const authView = document.getElementById('auth-view');
 const dashboardView = document.getElementById('dashboard-view');
 const groupView = document.getElementById('group-view');
 
-// ------------------- LOGOWANIE I AUTORYZACJA -------------------
+// ------------------- LOGOWANIE -------------------
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
-    // Pobierz imię użytkownika z bazy Firestore
     currentUserName = await getUserNameByUid(user.uid);
     
-    document.getElementById('user-email-display').innerText = `${currentUserName} (${user.email})`;
+    document.getElementById('user-name-display').innerText = currentUserName;
+    document.getElementById('update-name-input').value = currentUserName;
     showDashboard();
     loadUserGroups();
   } else {
@@ -60,60 +56,71 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// Pomocnicza funkcja do pobierania imienia po UID
 async function getUserNameByUid(uid) {
   try {
     const docRef = doc(db, "users", uid);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data().imie || currentUser.email;
+      return docSnap.data().name || "Użytkownik";
     }
   } catch (e) {
-    console.error("Błąd pobierania imienia:", e);
+    console.error("Błąd pobierania nazwy:", e);
   }
-  return currentUser.email;
+  return "Użytkownik";
 }
 
-document.getElementById('register-btn').addEventListener('click', async () => {
-  const name = document.getElementById('auth-name').value.trim();
-  const email = document.getElementById('auth-email').value;
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const nameInput = document.getElementById('auth-name').value.trim();
   const password = document.getElementById('auth-password').value;
 
-  if (!name) {
-    showError("Podaj swoje imię!");
+  if (!nameInput) {
+    showError("Podaj swoją nazwę!");
+    return;
+  }
+  if (!password || password.length < 6) {
+    showError("Hasło musi mieć co najmniej 6 znaków!");
     return;
   }
 
+  const fakeEmail = `${nameInput.toLowerCase().replace(/\s+/g, '')}@splitup.app`;
+
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    await signInWithEmailAndPassword(auth, fakeEmail, password);
+  } catch (loginError) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
+      const user = userCredential.user;
 
-    // Zapisz imię w bazie danych w kolekcji "users" pod adresem UID użytkownika
-    await setDoc(doc(db, "users", user.uid), {
-      imie: name,
-      email: email
-    });
-
-  } catch (error) {
-    showError(error.message);
-  }
-});
-
-document.getElementById('login-btn').addEventListener('click', async () => {
-  const email = document.getElementById('auth-email').value;
-  const password = document.getElementById('auth-password').value;
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    showError("Błędny email lub hasło!");
+      await setDoc(doc(db, "users", user.uid), {
+        name: nameInput
+      });
+    } catch (regError) {
+      showError("Błędne hasło dla tej nazwy lub nazwa jest zajęta przez kogoś innego.");
+    }
   }
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
   signOut(auth);
-  if(unsubscribeExpenses) unsubscribeExpenses();
-  if(unsubscribePayments) unsubscribePayments();
-  if(unsubscribeLogs) unsubscribeLogs();
+  cleanupListeners();
+});
+
+document.getElementById('update-name-btn').addEventListener('click', async () => {
+  const newName = document.getElementById('update-name-input').value.trim();
+  if (!newName) return alert("Nazwa nie może być pusta!");
+
+  try {
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      name: newName
+    });
+
+    currentUserName = newName;
+    document.getElementById('user-name-display').innerText = currentUserName;
+    alert("Zaktualizowano główną nazwę pomyślnie!");
+  } catch (error) {
+    console.error("Błąd aktualizacji nazwy:", error);
+    alert("Wystąpił błąd podczas aktualizacji nazwy.");
+  }
 });
 
 function showError(msg) {
@@ -132,6 +139,10 @@ function showDashboard() {
   authView.classList.add('hidden');
   dashboardView.classList.remove('hidden');
   groupView.classList.add('hidden');
+  
+  document.getElementById('new-group-member-name').value = currentUserName;
+  document.getElementById('join-group-member-name').value = currentUserName;
+  loadUserGroups();
 }
 
 function showGroup() {
@@ -140,9 +151,17 @@ function showGroup() {
   groupView.classList.remove('hidden');
 }
 
-// ------------------- ZARZĄDZANIE GRUPAMI (DASHBOARD) -------------------
+function cleanupListeners() {
+  if(unsubscribeExpenses) unsubscribeExpenses();
+  if(unsubscribePayments) unsubscribePayments();
+  if(unsubscribeLogs) unsubscribeLogs();
+  if(unsubscribeGroup) unsubscribeGroup();
+}
+
+// ------------------- ZARZĄDZANIE GRUPAMI -------------------
 
 async function loadUserGroups() {
+  if (!currentUser) return;
   const groupsRef = collection(db, "groups");
   const q = query(groupsRef, where("members", "array-contains", currentUser.uid));
   
@@ -155,27 +174,31 @@ async function loadUserGroups() {
     return;
   }
 
-  querySnapshot.forEach((doc) => {
-    const data = doc.data();
+  querySnapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    const myNameInGroup = data.membersMap && data.membersMap[currentUser.uid] ? data.membersMap[currentUser.uid] : "Uczestnik";
     const div = document.createElement('div');
     div.className = 'group-list-item';
-    div.innerHTML = `<span><strong>${data.name}</strong> (${Object.keys(data.membersMap || {}).length} os.)</span> <button class="btn-small">Otwórz</button>`;
-    div.onclick = () => openGroup(doc.id, data);
+    div.innerHTML = `<span><strong>${data.name}</strong> <br><small style="color:var(--text-muted);">Twoje imię: ${myNameInGroup}</small></span> <button class="btn-small">Otwórz</button>`;
+    div.onclick = () => openGroup(docSnap.id);
     listDiv.appendChild(div);
   });
 }
 
 document.getElementById('create-group-btn').addEventListener('click', async () => {
   const name = document.getElementById('new-group-name').value.trim();
+  const memberName = document.getElementById('new-group-member-name').value.trim();
+
   if (!name) return alert("Podaj nazwę grupy");
+  if (!memberName) return alert("Podaj swoją nazwę w tej grupie");
   
   let membersMap = {};
-  membersMap[currentUser.uid] = currentUserName;
+  membersMap[currentUser.uid] = memberName;
 
   await addDoc(collection(db, "groups"), {
     name: name,
-    members: [currentUser.uid], // Tablica UID do łatwego filtrowania zapytaniem array-contains
-    membersMap: membersMap,     // Mapa łącząca UID z Imieniem
+    members: [currentUser.uid], 
+    membersMap: membersMap,     
     createdAt: serverTimestamp()
   });
   
@@ -185,42 +208,65 @@ document.getElementById('create-group-btn').addEventListener('click', async () =
 
 document.getElementById('join-group-btn').addEventListener('click', async () => {
   const groupId = document.getElementById('join-group-id').value.trim();
+  const memberName = document.getElementById('join-group-member-name').value.trim();
+
   if (!groupId) return alert("Podaj ID grupy");
+  if (!memberName) return alert("Podaj swoją nazwę w tej grupie");
 
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
 
   if (groupSnap.exists()) {
     const data = groupSnap.data();
+    if(!data.membersMap) data.membersMap = {};
+    
     if (!data.members.includes(currentUser.uid)) {
       data.members.push(currentUser.uid);
-      if(!data.membersMap) data.membersMap = {};
-      data.membersMap[currentUser.uid] = currentUserName;
-
-      await updateDoc(groupRef, { 
-        members: data.members,
-        membersMap: data.membersMap
-      });
     }
+    data.membersMap[currentUser.uid] = memberName;
+
+    await updateDoc(groupRef, { 
+      members: data.members,
+      membersMap: data.membersMap
+    });
+
     document.getElementById('join-group-id').value = '';
     loadUserGroups();
+    alert("Dołączono do grupy pomyślnie!");
   } else {
     alert("Grupa o takim ID nie istnieje!");
   }
 });
 
-// ------------------- WIDOK GRUPY (AKCJE) -------------------
+// ------------------- WIDOK GRUPY -------------------
 
-function openGroup(id, data) {
+function openGroup(id) {
   currentGroupId = id;
-  currentGroupData = data;
-  
-  document.getElementById('group-title').innerText = data.name;
-  document.getElementById('group-id-display').innerText = id;
   showGroup();
 
-  // Zbuduj UI opierając się na mapie imion członków
-  updateGroupUI(data.membersMap);
+  // Nasłuchuj na żywo zmian w dokumencie grupy (np. gdy ktoś zmieni nazwę członka)
+  unsubscribeGroup = onSnapshot(doc(db, "groups", id), (docSnap) => {
+    if (docSnap.exists()) {
+      currentGroupData = docSnap.data();
+      
+      // Jeśli użytkownik z jakiegoś powodu został usunięty lub nie ma go w grupie
+      if (!currentGroupData.members.includes(currentUser.uid)) {
+        alert("Zostałeś wypisany z grupy lub grupa przestała istnieć.");
+        document.getElementById('back-to-dash-btn').click();
+        return;
+      }
+
+      const myNameInThisGroup = currentGroupData.membersMap && currentGroupData.membersMap[currentUser.uid] 
+        ? currentGroupData.membersMap[currentUser.uid] 
+        : currentUserName;
+
+      document.getElementById('group-title').innerText = currentGroupData.name;
+      document.getElementById('group-id-display').innerText = id;
+      document.getElementById('group-member-name-input').value = myNameInThisGroup;
+
+      updateGroupUI(currentGroupData.membersMap, myNameInThisGroup);
+    }
+  });
 
   listenToExpenses();
   listenToPayments();
@@ -228,9 +274,7 @@ function openGroup(id, data) {
 }
 
 document.getElementById('back-to-dash-btn').addEventListener('click', () => {
-  if(unsubscribeExpenses) unsubscribeExpenses();
-  if(unsubscribePayments) unsubscribePayments();
-  if(unsubscribeLogs) unsubscribeLogs();
+  cleanupListeners();
   showDashboard();
 });
 
@@ -239,27 +283,96 @@ document.getElementById('copy-group-id-btn').addEventListener('click', () => {
   alert(`Skopiowano ID grupy: ${currentGroupId}`);
 });
 
-function updateGroupUI(membersMap) {
+// Zmiana nazwy użytkownika wewnątrz konkretnej grupy
+document.getElementById('update-group-member-name-btn').addEventListener('click', async () => {
+  const newName = document.getElementById('group-member-name-input').value.trim();
+  if (!newName) return alert("Nazwa w grupie nie może być pusta!");
+
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      let data = groupSnap.data();
+      if (!data.membersMap) data.membersMap = {};
+      
+      const oldName = data.membersMap[currentUser.uid];
+      data.membersMap[currentUser.uid] = newName;
+
+      await updateDoc(groupRef, {
+        membersMap: data.membersMap
+      });
+
+      addLogIdSafe(`[Profil] Uczestnik zmienił nazwę z "${oldName}" na "${newName}".`, 'info');
+      alert("Zaktualizowano Twoją nazwę w tej grupie!");
+    }
+  } catch (error) {
+    console.error("Błąd zmiany nazwy w grupie:", error);
+    alert("Wystąpił błąd podczas aktualizacji nazwy.");
+  }
+});
+
+// Opuść grupę
+document.getElementById('leave-group-btn').addEventListener('click', async () => {
+  if (!confirm("Czy na pewno chcesz opuścić tę grupę? Stracisz do niej dostęp.")) return;
+
+  try {
+    const groupRef = doc(db, "groups", currentGroupId);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      let data = groupSnap.data();
+      
+      // Usuń użytkownika z listy members oraz z membersMap
+      data.members = data.members.filter(uid => uid !== currentUser.uid);
+      if (data.membersMap) {
+        delete data.membersMap[currentUser.uid];
+      }
+
+      await updateDoc(groupRef, {
+        members: data.members,
+        membersMap: data.membersMap
+      });
+
+      alert("Opuszczono grupę.");
+      document.getElementById('back-to-dash-btn').click();
+    }
+  } catch (error) {
+    console.error("Błąd podczas opuszczania grupy:", error);
+    alert("Nie udało się opuścić grupy.");
+  }
+});
+
+function updateGroupUI(membersMap, myNameInThisGroup) {
   const payerSelect = document.getElementById('expense-payer');
   const payFrom = document.getElementById('payment-from');
   const payTo = document.getElementById('payment-to');
 
-  // Tworzymy opcje select na podstawie mapy (klucz to UID, wartość to Imię)
-  const options = Object.entries(membersMap).map(([uid, name]) => `<option value="${name}">${name}</option>`).join('');
+  const names = Object.values(membersMap);
+  const options = names.map(name => `<option value="${name}">${name}</option>`).join('');
+  
   payerSelect.innerHTML = options;
   payFrom.innerHTML = options;
   payTo.innerHTML = options;
 
-  payerSelect.value = currentUserName;
-  payFrom.value = currentUserName;
+  // Zachowaj wybrane wcześniej opcje jeśli to możliwe, lub ustaw domyślne
+  if (names.includes(payerSelect.value)) {
+    // zostaw jak było
+  } else {
+    payerSelect.value = myNameInThisGroup;
+  }
 
-  document.getElementById('equal-users-list').innerHTML = Object.entries(membersMap).map(([uid, name]) => `
+  if (names.includes(payFrom.value)) {
+    // zostaw
+  } else {
+    payFrom.value = myNameInThisGroup;
+  }
+
+  document.getElementById('equal-users-list').innerHTML = names.map(name => `
     <label class="checkbox-label">
       <input type="checkbox" value="${name}" checked class="equal-user-check"> ${name}
     </label>
   `).join('');
 
-  document.getElementById('exact-users-list').innerHTML = Object.entries(membersMap).map(([uid, name]) => `
+  document.getElementById('exact-users-list').innerHTML = names.map(name => `
     <div class="split-item">
       <span>${name}</span>
       <input type="number" placeholder="0.00 PLN" data-user="${name}" class="exact-user-input" step="0.01">
@@ -267,17 +380,8 @@ function updateGroupUI(membersMap) {
   `).join('');
 }
 
-document.getElementById('split-type').addEventListener('change', (e) => {
-  if (e.target.value === 'equal') {
-    document.getElementById('equal-split-section').classList.remove('hidden');
-    document.getElementById('exact-split-section').classList.add('hidden');
-  } else {
-    document.getElementById('equal-split-section').classList.add('hidden');
-    document.getElementById('exact-split-section').classList.remove('hidden');
-  }
-});
-
 async function addLogToDB(message, type = 'info') {
+  if (!currentGroupId) return;
   await addDoc(collection(db, `groups/${currentGroupId}/logs`), {
     text: message,
     type: type,
@@ -285,12 +389,17 @@ async function addLogToDB(message, type = 'info') {
   });
 }
 
-// ------------------- WYDATKI (CRUD) -------------------
+function addLogIdSafe(message, type = 'info') {
+  addLogToDB(message, type);
+}
+
+// ------------------- WYDATKI I SPŁATY -------------------
 
 document.getElementById('save-expense-btn').addEventListener('click', async () => {
   const title = document.getElementById('expense-title').value.trim();
   const payer = document.getElementById('expense-payer').value;
   const type = document.getElementById('split-type').value;
+  const myNameInThisGroup = currentGroupData.membersMap[currentUser.uid];
   
   if (!title) return alert('Wpisz nazwę wydatku');
 
@@ -326,14 +435,14 @@ document.getElementById('save-expense-btn').addEventListener('click', async () =
   if (editingExpenseId) {
     const docRef = doc(db, `groups/${currentGroupId}/expenses`, editingExpenseId);
     await updateDoc(docRef, expenseData);
-    addLogToDB(`[Edycja] ${currentUserName} edytował(a) wydatek "${title}".`, 'info');
+    addLogToDB(`[Edycja] ${myNameInThisGroup} edytował(a) wydatek "${title}".`, 'info');
     editingExpenseId = null;
     document.getElementById('save-expense-btn').innerText = 'Zapisz wydatek';
     document.getElementById('cancel-edit-btn').classList.add('hidden');
   } else {
     expenseData.createdAt = serverTimestamp();
     await addDoc(collection(db, `groups/${currentGroupId}/expenses`), expenseData);
-    addLogToDB(`[Wydatek] ${currentUserName} dodał(a) wydatek "${title}" (${total.toFixed(2)} zł).`, 'info');
+    addLogToDB(`[Wydatek] ${myNameInThisGroup} dodał(a) wydatek "${title}" (${total.toFixed(2)} zł).`, 'info');
   }
 
   document.getElementById('expense-title').value = '';
@@ -362,18 +471,18 @@ window.editExpense = function(id) {
 }
 
 window.deleteExpense = async function(id, title, total) {
+  const myNameInThisGroup = currentGroupData.membersMap[currentUser.uid];
   if(confirm(`Usunąć wydatek "${title}"?`)) {
     await deleteDoc(doc(db, `groups/${currentGroupId}/expenses`, id));
-    addLogToDB(`[Usunięto] ${currentUserName} usunął(ęła) wydatek "${title}" (${total.toFixed(2)} zł).`, 'delete');
+    addLogToDB(`[Usunięto] ${myNameInThisGroup} usunął(ęła) wydatek "${title}" (${total.toFixed(2)} zł).`, 'delete');
   }
 }
-
-// ------------------- SPŁATY (CRUD) -------------------
 
 document.getElementById('add-payment-btn').addEventListener('click', async () => {
   const from = document.getElementById('payment-from').value;
   const to = document.getElementById('payment-to').value;
   const amount = parseFloat(document.getElementById('payment-amount').value);
+  const myNameInThisGroup = currentGroupData.membersMap[currentUser.uid];
 
   if (from === to) return alert('Nie można oddać pieniędzy samemu sobie');
   if (!amount || amount <= 0) return alert('Wpisz poprawną kwotę');
@@ -383,11 +492,11 @@ document.getElementById('add-payment-btn').addEventListener('click', async () =>
     createdAt: serverTimestamp()
   });
 
-  addLogToDB(`[Spłata] ${currentUserName} zarejestrował(a) spłatę: ${from} ➔ ${to} (${amount.toFixed(2)} zł).`, 'payment');
+  addLogToDB(`[Spłata] ${myNameInThisGroup} zarejestrował(a) spłatę: ${from} ➔ ${to} (${amount.toFixed(2)} zł).`, 'payment');
   document.getElementById('payment-amount').value = '';
 });
 
-// ------------------- NASŁUCHIWANIE I RENDEROWANIE (REAL-TIME) -------------------
+// ------------------- NASŁUCHIWANIE I RENDEROWANIE -------------------
 
 function listenToExpenses() {
   const q = query(collection(db, `groups/${currentGroupId}/expenses`), orderBy("createdAt", "desc"));
@@ -452,7 +561,6 @@ function calculateBalances() {
   if(!currentGroupData || !currentGroupData.membersMap) return;
   
   let balances = {};
-  // Inicjalizujemy bilanse używając imion członków z mapy
   Object.values(currentGroupData.membersMap).forEach(name => balances[name] = 0);
 
   localExpenses.forEach(exp => {
