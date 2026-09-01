@@ -4,7 +4,8 @@ import {
   onAuthStateChanged, signOut 
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { 
-  getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, 
+  getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, 
   onSnapshot, query, where, orderBy, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
@@ -19,7 +20,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Włączenie trwałości offline (obsługa braku internetu i synchronizacja po ponownym połączeniu)
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
 
 let currentUser = null;
 let currentUserName = ""; 
@@ -371,14 +378,13 @@ function renderMembersManagement(groupData) {
   const admins = groupData.admins || [];
   const currentUserIsAdmin = admins.includes(currentUser.uid);
 
-  // Sumowanie wydatków dla każdego użytkownika (jego udziały w wydatkach)
+  // Inicjalizacja sumy wydatków na 0 dla każdego członka
   const userTotals = {};
   Object.values(membersMap).forEach(name => userTotals[name] = 0);
+  
   localExpenses.forEach(exp => {
-    for (let [userName, amount] of Object.entries(exp.shares)) {
-      if (userTotals[userName] !== undefined) {
-        userTotals[userName] += amount;
-      }
+    if (userTotals[exp.payer] !== undefined) {
+      userTotals[exp.payer] += Number(exp.total) || 0;
     }
   });
 
@@ -401,8 +407,8 @@ function renderMembersManagement(groupData) {
           ${isUserAdmin ? '👑 Administrator' : '👤 Członek'}
         </span>
       </div>
-      <div style="font-size: 0.85rem; color: var(--accent); font-weight: 600; margin-bottom: 6px;">
-        Wydane łącznie: ${totalSpent} zł
+      <div style="font-size: 0.85rem; color: var(--accent, #4f46e5); font-weight: 600; margin-bottom: 6px;">
+        Suma wydatków (jako płatnik): ${totalSpent} zł
       </div>
     `;
 
@@ -758,7 +764,8 @@ function listenToExpenses() {
     localExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderHistory();
     calculateBalances();
-    // Odświeżamy też listę zarządzania członkami, jeśli jest aktualnie otwarta (zmieniają się sumy kwot)
+    
+    // Odśwież panel zarządzania członkami, aby kwoty się zaktualizowały
     if (!groupSettingsView.classList.contains('hidden') && currentGroupData) {
       renderMembersManagement(currentGroupData);
     }
@@ -766,7 +773,7 @@ function listenToExpenses() {
 }
 
 function listenToPayments() {
-  const q = query(collection(db, `groups/${currentGroupId}/payments`), orderBy("createdAt", "desc"));
+  const q = query(collection(db, `groups/${currentGroupId}/payments`));
   unsubscribePayments = onSnapshot(q, (snapshot) => {
     localPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     calculateBalances();
@@ -823,15 +830,15 @@ function calculateBalances() {
   Object.values(currentGroupData.membersMap).forEach(name => balances[name] = 0);
 
   localExpenses.forEach(exp => {
-    if(balances[exp.payer] !== undefined) balances[exp.payer] += exp.total;
+    if(balances[exp.payer] !== undefined) balances[exp.payer] += Number(exp.total) || 0;
     for (let user in exp.shares) {
-      if(balances[user] !== undefined) balances[user] -= exp.shares[user];
+      if(balances[user] !== undefined) balances[user] -= Number(exp.shares[user]) || 0;
     }
   });
 
   localPayments.forEach(p => {
-    if(balances[p.from] !== undefined) balances[p.from] += p.amount;
-    if(balances[p.to] !== undefined) balances[p.to] -= p.amount;
+    if(balances[p.from] !== undefined) balances[p.from] += Number(p.amount) || 0;
+    if(balances[p.to] !== undefined) balances[p.to] -= Number(p.amount) || 0;
   });
 
   let debtors = [];
