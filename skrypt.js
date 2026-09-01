@@ -62,12 +62,12 @@ async function getUserNameByUid(uid) {
     const docRef = doc(db, "users", uid);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data().name || "";
+      return docSnap.data().name || "Użytkownik";
     }
   } catch (e) {
     console.error("Błąd pobierania nazwy:", e);
   }
-  return "";
+  return "Użytkownik";
 }
 
 document.getElementById('login-btn').addEventListener('click', async () => {
@@ -371,6 +371,7 @@ function renderMembersManagement(groupData) {
   const admins = groupData.admins || [];
   const currentUserIsAdmin = admins.includes(currentUser.uid);
 
+  // Sumowanie wydatków dla każdego użytkownika (jego udziały w wydatkach)
   const userTotals = {};
   Object.values(membersMap).forEach(name => userTotals[name] = 0);
   localExpenses.forEach(exp => {
@@ -757,6 +758,7 @@ function listenToExpenses() {
     localExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderHistory();
     calculateBalances();
+    // Odświeżamy też listę zarządzania członkami, jeśli jest aktualnie otwarta (zmieniają się sumy kwot)
     if (!groupSettingsView.classList.contains('hidden') && currentGroupData) {
       renderMembersManagement(currentGroupData);
     }
