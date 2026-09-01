@@ -169,7 +169,6 @@ function showGroupSettings() {
     deleteGroupBtn.classList.add('hidden');
   }
   
-  // Odśwież listę zarządzania członkami za każdym razem po wejściu w ustawienia
   if (currentGroupData) {
     renderMembersManagement(currentGroupData);
   }
@@ -372,9 +371,21 @@ function renderMembersManagement(groupData) {
   const admins = groupData.admins || [];
   const currentUserIsAdmin = admins.includes(currentUser.uid);
 
+  // Sumowanie wydatków dla każdego użytkownika (jego udziały w wydatkach)
+  const userTotals = {};
+  Object.values(membersMap).forEach(name => userTotals[name] = 0);
+  localExpenses.forEach(exp => {
+    for (let [userName, amount] of Object.entries(exp.shares)) {
+      if (userTotals[userName] !== undefined) {
+        userTotals[userName] += amount;
+      }
+    }
+  });
+
   for (let [uid, name] of Object.entries(membersMap)) {
     const isMe = (uid === currentUser.uid);
     const isUserAdmin = admins.includes(uid);
+    const totalSpent = (userTotals[name] || 0).toFixed(2);
     
     const row = document.createElement('div');
     row.style.background = '#f9f9f9';
@@ -384,11 +395,14 @@ function renderMembersManagement(groupData) {
     row.style.marginBottom = '8px';
 
     let html = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
         <strong style="font-size: 0.95rem;">${name} ${isMe ? '(Ty)' : ''}</strong>
         <span style="font-size: 0.75rem; padding: 2px 6px; background: ${isUserAdmin ? '#e3f2fd' : '#eee'}; color: ${isUserAdmin ? '#1976d2' : '#666'}; border-radius: 4px; font-weight: 600;">
           ${isUserAdmin ? '👑 Administrator' : '👤 Członek'}
         </span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--accent); font-weight: 600; margin-bottom: 6px;">
+        Wydane łącznie: ${totalSpent} zł
       </div>
     `;
 
@@ -744,11 +758,15 @@ function listenToExpenses() {
     localExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderHistory();
     calculateBalances();
+    // Odświeżamy też listę zarządzania członkami, jeśli jest aktualnie otwarta (zmieniają się sumy kwot)
+    if (!groupSettingsView.classList.contains('hidden') && currentGroupData) {
+      renderMembersManagement(currentGroupData);
+    }
   });
 }
 
 function listenToPayments() {
-  const q = query(collection(db, `groups/${currentGroupId}/payments`));
+  const q = query(collection(db, `groups/${currentGroupId}/payments`), orderBy("createdAt", "desc"));
   unsubscribePayments = onSnapshot(q, (snapshot) => {
     localPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     calculateBalances();
