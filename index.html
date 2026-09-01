@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zaplanuj swoje wydatki</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Manifest (opcjonalny, do dodania aplikacji do ekranu głównego) -->
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
 <div class="container">
-
   <!-- WIDOK 1: Logowanie / Rejestracja ogólna -->
   <div id="auth-view" class="card">
     <h2>Zaloguj się</h2>
@@ -191,6 +192,15 @@
 </div>
 
 <script>
+  // Rejestracja Service Workera dla trybu offline
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('Service Worker zarejestrowany', reg))
+        .catch(err => console.error('Błąd rejestracji SW', err));
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     const splitTypeSelect = document.getElementById('split-type');
     const equalSection = document.getElementById('equal-split-section');
